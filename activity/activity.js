@@ -138,7 +138,7 @@ define(["webL10n",
         }
         var statslist = datastore.localStorage.getValue('sugar_stats');
         if (!statslist) {
-            return
+            return [];
         }
         var stat = {};
         stat.user_id = user.networkId;
