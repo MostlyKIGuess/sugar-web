@@ -10,6 +10,8 @@ define(["webL10n",
     'use strict';
 
     var datastoreObject = null;
+    var presenceCallback = null;
+    var presenceResponse = null;
 
     var activity = {};
 
@@ -17,7 +19,7 @@ define(["webL10n",
         bus.listen();
 
         l10n.start();
-
+        
         function sendPauseEvent() {
             var pauseEvent = document.createEvent("CustomEvent");
             pauseEvent.initCustomEvent('activityPause', false, false, {
@@ -37,7 +39,11 @@ define(["webL10n",
 
             var result = window.dispatchEvent(stopEvent);
             if (result) {
-                activity.close();
+                datastoreObject.save(function() {
+                    datastore.waitPendingSave(function() {
+                        activity.close();
+                    });
+                });
             }
         }
         bus.onNotification("activity.stop", sendStopEvent);
@@ -86,6 +92,16 @@ define(["webL10n",
         return datastoreObject;
     };
 
+    activity.getPresenceObject = function(connectionCallback) {
+		if (presenceResponse == null) {
+			presenceCallback = connectionCallback;
+		} else {
+			connectionCallback(presenceResponse.error, presenceResponse.presence);
+			presenceResponse = null;
+		}
+		return presence;
+	};
+
     activity.getXOColor = function (callback) {
         function onResponseReceived(error, result) {
             if (error === null) {
@@ -112,8 +128,30 @@ define(["webL10n",
                 callback(error, null);
             }
         }
-
+        activity.traceStats("activity","stop",window.top.sugar.environment.objectId,null);
         bus.sendMessage("activity.close", [], onResponseReceived);
+    };
+
+    activity.traceStats = function (object, action, label, value) {
+        if (!user.options.stats) {
+            return;
+        }
+        var statslist = datastore.localStorage.getValue('sugar_stats');
+        if (!statslist) {
+            return
+        }
+        var stat = {};
+        stat.user_id = user.networkId;
+        stat.user_agent = navigator.userAgent;
+        stat.timestamp = new Date().getTime();
+        stat.client_type = (document.location.protocol.substr(0,4) == "http" ? "Web App" : "App");
+        stat.event_source = window.top.sugar.environment.bundleId;
+        stat.event_object = object;
+        stat.event_action = action;
+        stat.event_label = label;
+        stat.event_value = value;
+        statslist.push(stat);
+		datastore.localStorage.setValue('sugar_stats', statslist);
     };
 
     activity.showObjectChooser = function (callback) {
